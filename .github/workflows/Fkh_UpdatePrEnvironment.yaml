@@ -124,7 +124,9 @@ jobs:
 
       - name: Dump content of artifacts folder
         if: steps.determine.outputs.action == 'create'
-        run: Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { Write-Host "Found artifact: $($_.FullName)" }
+        run: |
+          Write-Host $ENV:ARTIFACT
+          Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { Write-Host "Found artifact: $($_.FullName)" }
 
       - name: Remove container
         if: steps.determine.outputs.action == 'remove'
