@@ -19,7 +19,7 @@ permissions:
   actions: read
 
 jobs:
-  manage-container:
+  UpdatePrEnvironment:
     runs-on: windows-latest
     steps:
       - name: Determine action
@@ -111,13 +111,13 @@ jobs:
         uses: microsoft/AL-Go-Actions/GetArtifactsForDeployment@main
         with:
           shell: pwsh
-          artifactsVersion: 'PR_2'
+          artifactsVersion: 'PR_${{ steps.determine.outputs.pr_number }}'
           artifactsFolder: '.artifacts'
           buildMode: 'default'
 
       - name: Dump content of artifacts folder
         if: steps.determine.outputs.action == 'create'
-        run: Get-ChildItem -Path .artifacts -Recurse | Format-List
+        run: Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { Write-Host "Found artifact: $($_.FullName)" }
 
       - name: Remove container
         if: steps.determine.outputs.action == 'remove'
