@@ -20,6 +20,8 @@ permissions:
 
 env:
   FKH_BACKEND_URL: '${{ vars.FKH_BACKEND_URL }}'
+  FKH_TIMEZONE: 'Europe/Copenhagen'
+
 jobs:
   UpdatePrEnvironment:
     runs-on: windows-latest
@@ -131,6 +133,7 @@ jobs:
       - name: Create/Update container
         if: steps.determine.outputs.action == 'create'
         run: |
+          Import-Module BcContainerHelper -disableNameChecking
           $files = Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { $_.FullName }
           Write-Host "Files to publish:"
           $files | ForEach-Object { Write-Host "- $_" }
@@ -139,14 +142,14 @@ jobs:
           $containers = Fkh listcontainers --oidcToken "$env:oidcToken" --asJson | ConvertFrom-Json
           $container = $containers.containers | Where-Object { $_.Name -eq $containerName }
           if (-not $container) {
-            Fkh createcontainer --name $containerName --oidcToken "$env:oidcToken" --artifactUrl "$env:ARTIFACT" --adminUsername "admin" --adminPassword "${{ secrets.CONTAINER_ADMIN_PASSWORD }}"
+            Fkh createcontainer --name $containerName --oidcToken "$env:oidcToken" --artifactUrl "$env:ARTIFACT" --adminUsername "admin" --adminPassword "${{ secrets.CONTAINER_ADMIN_PASSWORD }}" --autoStop "18:00"
           }
           elseif ($container.Status -eq 'Stopped') {
             Write-Host "Container $containerName exists but is stopped, starting container"
-            Fkh startcontainer --name $containerName --oidcToken "$env:oidcToken"
+            Fkh startcontainer --name $containerName --oidcToken "$env:oidcToken" --autoStop "18:00"
           }
           Fkh waitforcontainer --name $containerName --oidcToken "$env:oidcToken"
-          Sort-AppFilesByDependencies -appFiles $files | ForEach-Object {
+          Sort-AppFilesByDependencies -appFiles $files -warningAction SilentlyContinue | ForEach-Object {
             Write-Host "Publishing app file $_"
             Fkh publishApp --name $containerName --oidcToken "$env:oidcToken" --appFile $_
           }
