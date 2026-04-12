@@ -106,6 +106,13 @@ jobs:
           Write-Host "Create Container PR${{ steps.determine.outputs.pr_number }}"
           # Fkh createcontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
 
+      - name: Read settings
+        uses: microsoft/AL-Go-Actions/ReadSettings@main
+        with:
+          shell: ${{ matrix.shell }}
+          project: '.'
+          get: artifact
+
       - name: Get Artifacts for deployment
         if: steps.determine.outputs.action == 'create'
         uses: microsoft/AL-Go-Actions/GetArtifactsForDeployment@main
