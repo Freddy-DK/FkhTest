@@ -126,7 +126,7 @@ jobs:
         run: |
           Write-Host $ENV:ARTIFACT
 
-      - name: Create container
+      - name: Create/Update container
         if: steps.determine.outputs.action == 'create'
         run: |
           $files = Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { $_.FullName }
@@ -154,4 +154,4 @@ jobs:
         run: |
           $containerName = "PR${{ steps.determine.outputs.pr_number }}"
           Write-Host "Remove Container $containerName"
-          # Fkh removecontainer --name $containerName --oidcToken "$env:oidcToken"
+          Fkh removecontainer --name $containerName --oidcToken "$env:oidcToken"
