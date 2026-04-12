@@ -1,4 +1,4 @@
-name: 'Fkh Test Environment'
+name: 'Fkh Update PR Environment'
 
 on:
   workflow_run:
@@ -98,7 +98,7 @@ jobs:
 
       - name: Install Fkh
         if: steps.determine.outputs.action != 'none'
-        run: dotnet tool install -g Fkh
+        run: dotnet tool install -g Fkh --prerelease
 
       - name: Create container
         if: steps.determine.outputs.action == 'create'
