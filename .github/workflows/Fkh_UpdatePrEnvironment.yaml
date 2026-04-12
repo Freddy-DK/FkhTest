@@ -18,6 +18,8 @@ permissions:
   pull-requests: read
   actions: read
 
+env:
+  FKH_BACKEND_URL: '${{ vars.FKH_BACKEND_URL }}'
 jobs:
   UpdatePrEnvironment:
     runs-on: windows-latest
