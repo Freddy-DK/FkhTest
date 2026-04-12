@@ -106,10 +106,6 @@ jobs:
           Write-Host "Create Container PR${{ steps.determine.outputs.pr_number }}"
           # Fkh createcontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
 
-      - name: Checkout
-        if: steps.determine.outputs.action == 'create'
-        uses: actions/checkout@v6
-
       - name: Get Artifacts for deployment
         if: steps.determine.outputs.action == 'create'
         uses: microsoft/AL-Go-Actions/GetArtifactsForDeployment@main
