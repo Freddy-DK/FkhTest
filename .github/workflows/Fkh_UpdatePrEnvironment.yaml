@@ -100,13 +100,12 @@ jobs:
         if: steps.determine.outputs.action != 'none'
         run: dotnet tool install -g Fkh --prerelease
 
-      - name: Create container
+      - name: Checkout
         if: steps.determine.outputs.action == 'create'
-        run: |
-          Write-Host "Create Container PR${{ steps.determine.outputs.pr_number }}"
-          # Fkh createcontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
+        uses: actions/checkout@v6
 
       - name: Read settings
+        if: steps.determine.outputs.action == 'create'
         uses: microsoft/AL-Go-Actions/ReadSettings@main
         with:
           shell: pwsh
@@ -127,6 +126,12 @@ jobs:
         run: |
           Write-Host $ENV:ARTIFACT
           Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { Write-Host "Found artifact: $($_.FullName)" }
+
+      - name: Create container
+        if: steps.determine.outputs.action == 'create'
+        run: |
+          Write-Host "Create Container PR${{ steps.determine.outputs.pr_number }}"
+          # Fkh createcontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
 
       - name: Remove container
         if: steps.determine.outputs.action == 'remove'
