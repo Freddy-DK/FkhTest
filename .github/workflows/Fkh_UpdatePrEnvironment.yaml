@@ -1,0 +1,113 @@
+name: 'Fkh Test Environment'
+
+on:
+  workflow_run:
+    workflows: ['Pull Request Build']
+    types: [completed]
+  pull_request:
+    branches: ['main']
+    types: [ready_for_review, closed]
+
+defaults:
+  run:
+    shell: pwsh
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  manage-container:
+    runs-on: windows-latest
+    steps:
+      - name: Determine action
+        id: determine
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $action = 'none'
+          $prNumber = 0
+
+          if ('${{ github.event_name }}' -eq 'workflow_run') {
+            $conclusion = '${{ github.event.workflow_run.conclusion }}'
+            $runEvent = '${{ github.event.workflow_run.event }}'
+            if ($conclusion -ne 'success') {
+              Write-Host "Workflow run conclusion: $conclusion, skipping"
+              "action=none" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              return
+            }
+            if ($runEvent -ne 'pull_request') {
+              Write-Host "Workflow run event: $runEvent, skipping"
+              "action=none" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              return
+            }
+            $prsJson = '${{ toJson(github.event.workflow_run.pull_requests) }}'
+            $prs = $prsJson | ConvertFrom-Json
+            if (-not $prs -or $prs.Count -eq 0) {
+              Write-Host 'No pull requests found for this workflow run'
+              "action=none" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              return
+            }
+            $prNumber = $prs[0].number
+            $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
+            $pr = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/pulls/$prNumber" -Headers $headers
+            if ($pr.draft) {
+              Write-Host 'PR is still a draft, skipping'
+              "action=none" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              return
+            }
+            if ($pr.state -eq 'closed') {
+              Write-Host 'PR is already closed, skipping'
+              "action=none" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              return
+            }
+            $action = 'create'
+          } elseif ('${{ github.event_name }}' -eq 'pull_request') {
+            $prNumber = ${{ github.event.pull_request.number }}
+            $prAction = '${{ github.event.action }}'
+
+            if ($prAction -eq 'closed') {
+              $action = 'remove'
+            } elseif ($prAction -eq 'ready_for_review') {
+              $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
+              $headSha = '${{ github.event.pull_request.head.sha }}'
+              $runs = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=$headSha&status=success" -Headers $headers
+              $buildSucceeded = $runs.workflow_runs | Where-Object { $_.name -eq 'Pull Request Build' }
+              if ($buildSucceeded) {
+                $action = 'create'
+              } else {
+                Write-Host 'Pull Request Build has not succeeded for this commit yet, skipping'
+              }
+            }
+          }
+
+          "action=$action" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "pr_number=$prNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Action: $action, PR: $prNumber"
+
+      - name: Get OIDC Token
+        if: steps.determine.outputs.action != 'none'
+        id: oidc
+        run: |
+          $token = Invoke-RestMethod -Uri "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" -Headers @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" }
+          $oidcToken = $token.value
+          Write-Host "::add-mask::$oidcToken"
+          "oidcToken=$oidcToken" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install Fkh
+        if: steps.determine.outputs.action != 'none'
+        run: dotnet tool install -g Fkh
+
+      - name: Create container
+        if: steps.determine.outputs.action == 'create'
+        run: |
+          Write-Host "Create Container PR${{ steps.determine.outputs.pr_number }}"
+          # Fkh createcontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
+
+      - name: Remove container
+        if: steps.determine.outputs.action == 'remove'
+        run: |
+          Write-Host "Remove Container PR${{ steps.determine.outputs.pr_number }}"
+          # Fkh removecontainer --name "PR${{ steps.determine.outputs.pr_number }}" --oidcToken "$env:oidcToken"
