@@ -133,6 +133,8 @@ jobs:
       - name: Create/Update container
         if: steps.determine.outputs.action == 'create'
         run: |
+          Write-Host "Install BccontainerHelper from PowerShell Gallery"
+          Install-Module -Name BcContainerHelper -Force
           Import-Module BcContainerHelper -disableNameChecking
           $files = Get-ChildItem -Path .artifacts -File -Filter '*.app' -Recurse | ForEach-Object { $_.FullName }
           Write-Host "Files to publish:"
@@ -151,7 +153,7 @@ jobs:
           Fkh waitforcontainer --name $containerName --oidcToken "$env:oidcToken"
           Sort-AppFilesByDependencies -appFiles $files -warningAction SilentlyContinue | ForEach-Object {
             Write-Host "Publishing app file $_"
-            Fkh publishApp --name $containerName --oidcToken "$env:oidcToken" --appFile $_
+            Fkh publishapp --name $containerName --oidcToken "$env:oidcToken" --appFile $_
           }
 
       - name: Remove container
