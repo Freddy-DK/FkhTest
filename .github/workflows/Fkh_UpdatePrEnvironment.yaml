@@ -109,7 +109,7 @@ jobs:
       - name: Read settings
         uses: microsoft/AL-Go-Actions/ReadSettings@main
         with:
-          shell: ${{ matrix.shell }}
+          shell: pwsh
           project: '.'
           get: artifact
 
