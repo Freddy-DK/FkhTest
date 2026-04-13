@@ -15,7 +15,7 @@ defaults:
 permissions:
   id-token: write
   contents: read
-  pull-requests: read
+  pull-requests: write
   actions: read
 
 env:
@@ -131,6 +131,7 @@ jobs:
           Write-Host $ENV:ARTIFACT
 
       - name: Create/Update container
+        id: createcontainer
         if: steps.determine.outputs.action == 'create'
         run: |
           Write-Host "Install BccontainerHelper from PowerShell Gallery"
@@ -144,7 +145,8 @@ jobs:
           $containers = Fkh listcontainers --oidcToken "$env:oidcToken" --asJson | ConvertFrom-Json
           $container = $containers.containers | Where-Object { $_.Name -eq $containerName }
           if (-not $container) {
-            Fkh createcontainer --name $containerName --oidcToken "$env:oidcToken" --artifactUrl "$env:ARTIFACT" --adminUsername "admin" --adminPassword "${{ secrets.CONTAINER_ADMIN_PASSWORD }}" --autoStop "18:00"
+            $result = Fkh createcontainer --name $containerName --oidcToken "$env:oidcToken" --artifactUrl "$env:ARTIFACT" --adminUsername "admin" --adminPassword "${{ secrets.CONTAINER_ADMIN_PASSWORD }}" --autoStop "18:00" --asJson | ConvertFrom-Json
+            "webclientUrl=$($result.WebClient)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
           elseif ($container.Status -eq 'Stopped') {
             Write-Host "Container $containerName exists but is stopped, starting container"
@@ -156,9 +158,30 @@ jobs:
             Fkh publishapp --name $containerName --oidcToken "$env:oidcToken" --appFile $_
           }
 
+      - name: Add PR comment with webclient URL
+        if: steps.createcontainer.outputs.webclientUrl != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $prNumber = ${{ steps.determine.outputs.pr_number }}
+          $webclientUrl = '${{ steps.createcontainer.outputs.webclientUrl }}'
+          $body = "### :test_tube: Test Environment Ready`n`nA test environment has been created for this pull request.`n`n**Web Client:** $webclientUrl`n`nUse this environment to test the changes in this PR."
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
+          Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/issues/$prNumber/comments" -Headers $headers -ContentType 'application/json' -Body (@{ body = $body } | ConvertTo-Json)
+
       - name: Remove container
         if: steps.determine.outputs.action == 'remove'
         run: |
           $containerName = "PR${{ steps.determine.outputs.pr_number }}"
           Write-Host "Remove Container $containerName"
           Fkh removecontainer --name $containerName --oidcToken "$env:oidcToken"
+
+      - name: Add PR comment for removed environment
+        if: steps.determine.outputs.action == 'remove'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $prNumber = ${{ steps.determine.outputs.pr_number }}
+          $body = "### :wastebasket: Test Environment Removed`n`nThe test environment for this pull request has been deleted."
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
+          Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/issues/$prNumber/comments" -Headers $headers -ContentType 'application/json' -Body (@{ body = $body } | ConvertTo-Json)
